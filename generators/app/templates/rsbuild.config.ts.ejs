@@ -1,0 +1,18 @@
+import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
+import { pluginModuleFederation } from '@module-federation/rsbuild-plugin';
+import moduleFederationConfig from './module-federation.config';
+
+export default defineConfig({
+  plugins: [pluginReact(), pluginModuleFederation(moduleFederationConfig)],
+  server: {
+    port: <%= port %>,
+    strictPort: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+  },
+  output: {
+    assetPrefix: 'auto',
+  },
+});

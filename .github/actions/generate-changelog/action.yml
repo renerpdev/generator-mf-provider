@@ -1,0 +1,215 @@
+name: 'Generate Changelog'
+description: 'Generate and update changelog for a release'
+
+inputs:
+  version:
+    description: 'Version tag (e.g., v1.0.0)'
+    required: true
+  version_without_v:
+    description: 'Version without v prefix (e.g., 1.0.0)'
+    required: true
+  latest_tag:
+    description: 'Latest git tag'
+    required: true
+
+outputs:
+  changelog_body:
+    description: 'Changelog content for the release'
+    value: ${{ steps.get_changelog_content.outputs.body }}
+
+runs:
+  using: composite
+  steps:
+    - name: Update changelog format
+      shell: bash
+      run: |
+        NEW_VERSION="${{ inputs.version }}"
+        VERSION_WITHOUT_V="${{ inputs.version_without_v }}"
+        RELEASE_DATE=$(date +%Y-%m-%d)
+        
+        # Update [Unreleased] section to the actual version for this release
+        if [ -f CHANGELOG.md ]; then
+          # Replace [Unreleased] with the actual version and date
+          # Format: ## [Unreleased] -> ## [version] - yyyy-mm-dd
+          if grep -q "^## \[Unreleased\]" CHANGELOG.md; then
+            sed -i.bak "s/^## \[Unreleased\]/## \[$VERSION_WITHOUT_V\] - $RELEASE_DATE/" CHANGELOG.md
+            rm -f CHANGELOG.md.bak
+          fi
+          
+          # Generate all footer links in Keep a Changelog format
+          # Extract repository URL from package.json and normalize it
+          REPO_URL=$(node -p "
+            const repo = require('./package.json').repository;
+            const url = typeof repo === 'string' ? repo : repo.url;
+            url.replace(/\.git$/, '').replace(/^git\+/, '').replace(/^git@github.com:/, 'https://github.com/')
+          ")
+          
+          # Fetch all tags and sort by version (descending)
+          git fetch --tags --force
+          EXISTING_TAGS=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' || echo "")
+          
+          # Include the new version tag in the list (it may not exist yet as a git tag)
+          # Ensure NEW_VERSION has 'v' prefix for comparison
+          NEW_TAG="$NEW_VERSION"
+          if [[ ! "$NEW_TAG" =~ ^v ]]; then
+            NEW_TAG="v${NEW_TAG}"
+          fi
+          
+          # Combine existing tags with new tag, sort, and remove duplicates
+          ALL_TAGS=$(echo -e "$EXISTING_TAGS\n$NEW_TAG" | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | uniq)
+          
+          # Remove all existing footer links (lines starting with [version]: or [unreleased]:)
+          sed -i.bak '/^\[.*\]: https:\/\/.*\/compare\//d; /^\[.*\]: https:\/\/.*\/releases\/tag\//d; /^\[unreleased\]:/d' CHANGELOG.md
+          rm -f CHANGELOG.md.bak
+          
+          # Remove trailing blank lines before adding footer links
+          sed -i.bak -e :a -e '/^\n*$/{$d;N;ba' -e '}' CHANGELOG.md 2>/dev/null || true
+          rm -f CHANGELOG.md.bak
+          
+          # Add blank line before footer links
+          echo "" >> CHANGELOG.md
+          
+          # Generate unreleased link (newest tag to HEAD)
+          if [ -n "$ALL_TAGS" ]; then
+            LATEST_TAG=$(echo "$ALL_TAGS" | head -n 1)
+            # Ensure tag has 'v' prefix
+            if [[ ! "$LATEST_TAG" =~ ^v ]]; then
+              LATEST_TAG="v${LATEST_TAG}"
+            fi
+            echo "[unreleased]: $REPO_URL/compare/$LATEST_TAG...HEAD" >> CHANGELOG.md
+          fi
+          
+          # Generate compare links for all tags (from previous to current)
+          # Tags are sorted descending (newest first), process them to build links
+          if [ -n "$ALL_TAGS" ]; then
+            # Convert to array (newest first)
+            TAG_ARRAY=($(echo "$ALL_TAGS"))
+            TAG_COUNT=${#TAG_ARRAY[@]}
+            
+            # Build links array in memory (newest to oldest)
+            LINKS=()
+            
+            # Process tags from newest to oldest
+            for i in "${!TAG_ARRAY[@]}"; do
+              CURRENT_TAG="${TAG_ARRAY[$i]}"
+              
+              # Ensure tag has 'v' prefix
+              if [[ ! "$CURRENT_TAG" =~ ^v ]]; then
+                CURRENT_TAG="v${CURRENT_TAG}"
+              fi
+              
+              CURRENT_VERSION=${CURRENT_TAG#v}
+              
+              # Check if this is the last (oldest) tag
+              if [ $i -eq $((TAG_COUNT - 1)) ]; then
+                # Oldest tag: just link to the release tag
+                LINKS+=("[$CURRENT_VERSION]: $REPO_URL/releases/tag/$CURRENT_TAG")
+              else
+                # Compare link: previous (older) tag to current tag
+                # Since array is newest first, previous tag is at next index
+                PREV_TAG="${TAG_ARRAY[$((i+1))]}"
+                if [[ ! "$PREV_TAG" =~ ^v ]]; then
+                  PREV_TAG="v${PREV_TAG}"
+                fi
+                LINKS+=("[$CURRENT_VERSION]: $REPO_URL/compare/$PREV_TAG...$CURRENT_TAG")
+              fi
+            done
+            
+            # Output links (newest to oldest)
+            for link in "${LINKS[@]}"; do
+              echo "$link" >> CHANGELOG.md
+            done
+          fi
+          
+          # Ensure [Unreleased] section exists at the top for future changes
+          # Find the first ## header and add [Unreleased] before it (if it doesn't exist)
+          if ! grep -q "^## \[Unreleased\]" CHANGELOG.md; then
+            # Find the first version header (## [version] - date)
+            FIRST_VERSION_LINE=$(grep -n "^## \[" CHANGELOG.md | head -n 1 | cut -d: -f1)
+            if [ -n "$FIRST_VERSION_LINE" ]; then
+              # Insert [Unreleased] section before the first version header
+              {
+                head -n $((FIRST_VERSION_LINE - 1)) CHANGELOG.md
+                echo "## [Unreleased]"
+                echo ""
+                tail -n +$FIRST_VERSION_LINE CHANGELOG.md
+              } > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+            else
+              # No version headers found, add after title
+              {
+                head -n 1 CHANGELOG.md
+                echo ""
+                echo "## [Unreleased]"
+                echo ""
+                tail -n +2 CHANGELOG.md
+              } > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+            fi
+          fi
+        fi
+
+    - name: Get changelog content
+      id: get_changelog_content
+      shell: bash
+      run: |
+        VERSION_WITHOUT_V="${{ inputs.version_without_v }}"
+        
+        # Extract changelog content for this version
+        # Look for version header in format: ## [version] - yyyy-mm-dd
+        if [ -f CHANGELOG.md ]; then
+          # Extract content between this version header and the next version header (or end of file)
+          # Skip empty lines at the start
+          awk -v version="$VERSION_WITHOUT_V" '
+            BEGIN { in_section = 0; found_content = 0 }
+            /^## \[/ {
+              # Check if this is our version header (matches ## [version] - date)
+              if ($0 ~ "\\[" version "\\]") {
+                in_section = 1
+                next
+              } else if (in_section) {
+                # Hit next version header, stop
+                exit
+              }
+            }
+            in_section {
+              # Skip empty lines until we find content
+              if ($0 ~ /^[[:space:]]*$/) {
+                if (found_content) print
+                next
+              }
+              found_content = 1
+              print
+            }
+          ' CHANGELOG.md > /tmp/changelog_section.txt || true
+          
+          CHANGELOG_CONTENT=$(cat /tmp/changelog_section.txt 2>/dev/null | head -100 || echo "")
+          
+          # If no content found, use a default message
+          if [ -z "$CHANGELOG_CONTENT" ] || [ "$CHANGELOG_CONTENT" = "" ]; then
+            CHANGELOG_CONTENT="See CHANGELOG.md for details."
+          fi
+          
+          # Use multiline output for GitHub Actions
+          {
+            echo "body<<EOF"
+            echo "$CHANGELOG_CONTENT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+        else
+          echo "body=Release ${{ inputs.version }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Commit changelog
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add CHANGELOG.md
+        
+        # Check if there are any changes to commit
+        if git diff --staged --quiet; then
+          echo "No changelog changes to commit"
+        else
+          git commit -m "chore: update changelog for ${{ inputs.version }} [skip ci]"
+          git push
+        fi
+

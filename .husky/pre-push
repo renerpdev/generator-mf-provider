@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+
+echo "🔍 Checking package.json version against latest Git tag..."
+
+# Get package.json version
+PKG_VERSION=$(node -p "require('./package.json').version")
+
+# Get latest Git tag sorted by semver (descending)
+LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || echo "")
+
+# If no tag exists yet, skip validation
+if [ -z "$LATEST_TAG" ]; then
+  echo "⚠️  No git tags found — skipping version check."
+  exit 0
+fi
+
+# Remove 'v' prefix if present
+TAG_VERSION=${LATEST_TAG#v}
+
+# Compare versions
+if [ "$PKG_VERSION" = "$TAG_VERSION" ]; then
+  echo "✅ Version check passed — package.json version matches latest tag ($LATEST_TAG)."
+  exit 0
+fi
+
+# Validate semver ordering
+if ! npx semver -r ">$TAG_VERSION" "$PKG_VERSION" >/dev/null 2>&1; then
+  echo "❌ Version mismatch!"
+  echo "package.json version: $PKG_VERSION"
+  echo "latest git tag:        $LATEST_TAG"
+  echo "Expected: package.json version should be a *higher* semver than latest tag."
+  echo ""
+  echo "Debug info:"
+  npx semver -r ">$TAG_VERSION" "$PKG_VERSION" || true
+  exit 1
+fi
+
+echo "✅ Version bump confirmed — package.json version ($PKG_VERSION) is newer than $LATEST_TAG."
