@@ -1,0 +1,214 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - major
+          - minor
+          - patch
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          git fetch --tags
+          # Get the latest tag sorted by version (descending)
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          # Ensure tag has 'v' prefix
+          if [[ ! "$LATEST_TAG" =~ ^v ]]; then
+            LATEST_TAG="v${LATEST_TAG}"
+          fi
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Latest tag: $LATEST_TAG"
+
+      - name: Get current package.json version
+        id: get_package_version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current package.json version: $CURRENT_VERSION"
+
+      - name: Determine new version
+        id: determine_version
+        run: |
+          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          CURRENT_VERSION="${{ steps.get_package_version.outputs.current_version }}"
+          
+          # Remove 'v' prefix if present from tag
+          LATEST_VERSION=${LATEST_TAG#v}
+          
+          # Check if this is a manual workflow dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BUMP_TYPE="${{ github.event.inputs.version_bump }}"
+            
+            # Use package.json version if it's higher than or equal to latest tag, otherwise use latest tag
+            if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "0.0.0" ]; then
+              BASE_VERSION=$CURRENT_VERSION
+            else
+              # Compare versions - prefer package.json version if it's >= latest tag
+              if node -e "const semver = require('semver'); process.exit(semver.gte('$CURRENT_VERSION', '$LATEST_VERSION') ? 0 : 1)"; then
+                BASE_VERSION=$CURRENT_VERSION
+              else
+                BASE_VERSION=$LATEST_VERSION
+              fi
+            fi
+            
+            # Split version into major, minor, patch
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+            
+            # Apply bump type
+            case "$BUMP_TYPE" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+            
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            VERSION_WITHOUT_V="${MAJOR}.${MINOR}.${PATCH}"
+            
+            echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "version_without_v=$VERSION_WITHOUT_V" >> $GITHUB_OUTPUT
+            echo "Manual bump type: $BUMP_TYPE"
+            echo "New version: $NEW_VERSION"
+          else
+            # Push event - check if package.json version was bumped
+            # Check if LATEST_TAG is the fallback value (meaning no tags exist)
+            if [ "$LATEST_TAG" = "v0.0.0" ]; then
+              # No previous tag exists, use current package.json version
+              NEW_VERSION="v${CURRENT_VERSION}"
+              VERSION_WITHOUT_V=$CURRENT_VERSION
+              echo "bump_type=initial" >> $GITHUB_OUTPUT
+              echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+              echo "version_without_v=$VERSION_WITHOUT_V" >> $GITHUB_OUTPUT
+              echo "Initial release: $NEW_VERSION"
+            else
+              # Tags exist - compare package.json version with latest tag
+              # Use package.json version if it's higher than latest tag
+              if node -e "const semver = require('semver'); process.exit(semver.gt('$CURRENT_VERSION', '$LATEST_VERSION') ? 0 : 1)"; then
+                # Package.json version is higher than latest tag - use package.json version
+                NEW_VERSION="v${CURRENT_VERSION}"
+                VERSION_WITHOUT_V=$CURRENT_VERSION
+                echo "bump_type=detected" >> $GITHUB_OUTPUT
+                echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+                echo "version_without_v=$VERSION_WITHOUT_V" >> $GITHUB_OUTPUT
+                echo "Using package.json version: $NEW_VERSION (latest tag was $LATEST_TAG)"
+              else
+                # Package.json version is not higher than latest tag - no release
+                echo "bump_type=none" >> $GITHUB_OUTPUT
+                echo "No release needed - package.json version ($CURRENT_VERSION) is not higher than latest tag ($LATEST_TAG / $LATEST_VERSION)"
+              fi
+            fi
+          fi
+
+      - name: Check if release needed
+        id: should_release
+        run: |
+          BUMP_TYPE="${{ steps.determine_version.outputs.bump_type }}"
+          if [ "$BUMP_TYPE" = "none" ]; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "No release needed - skipping"
+          else
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Release needed - proceeding"
+          fi
+
+      - name: Generate changelog
+        if: steps.should_release.outputs.should_release == 'true'
+        uses: ./.github/actions/generate-changelog
+        with:
+          version: ${{ steps.determine_version.outputs.new_version }}
+          version_without_v: ${{ steps.determine_version.outputs.version_without_v }}
+          latest_tag: ${{ steps.get_latest_tag.outputs.latest_tag }}
+        id: generate_changelog
+
+      - name: Commit version changes
+        if: steps.should_release.outputs.should_release == 'true' && github.event_name == 'workflow_dispatch'
+        run: |
+          NEW_VERSION="${{ steps.determine_version.outputs.new_version }}"
+          VERSION_WITHOUT_V="${{ steps.determine_version.outputs.version_without_v }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "$CURRENT_VERSION" != "$VERSION_WITHOUT_V" ]; then
+            npm version $VERSION_WITHOUT_V --no-git-tag-version
+            git add package.json
+            git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+            git push
+          fi
+
+      - name: Create and push tag
+        if: steps.should_release.outputs.should_release == 'true'
+        run: |
+          NEW_VERSION="${{ steps.determine_version.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a $NEW_VERSION -m "Release $NEW_VERSION"
+          git push origin $NEW_VERSION
+
+      - name: Create Release
+        if: steps.should_release.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.determine_version.outputs.new_version }}
+          body: ${{ steps.generate_changelog.outputs.changelog_body }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          

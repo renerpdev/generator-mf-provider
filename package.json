@@ -1,0 +1,51 @@
+{
+  "name": "@renerpdev/generator-mf-provider",
+  "version": "0.0.1",
+  "description": "Yeoman generator for creating a React Microfrontend Provider",
+  "type": "module",
+  "scripts": {
+    "prepare": "test -z \"$CI\" && test -z \"$GITHUB_ACTIONS\" && husky install || true",
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
+    "changelog:all": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "lint-staged": {
+    "*.{js,json,md}": [
+      "prettier --write"
+    ]
+  },
+  "files": [
+    "generators"
+  ],
+  "keywords": [
+    "yeoman-generator",
+    "react",
+    "microfrontend",
+    "rsbuild",
+    "module-federation",
+    "typescript"
+  ],
+  "author": "renerpdev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/renerpdev/generator-mf-provider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/renerpdev/generator-mf-provider/issues"
+  },
+  "homepage": "https://github.com/renerpdev/generator-mf-provider#readme",
+  "license": "MIT",
+  "dependencies": {
+    "yeoman-generator": "^7.5.1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "conventional-changelog-cli": "^4.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "prettier": "^3.6.2",
+    "semver": "^7.7.3"
+  }
+}

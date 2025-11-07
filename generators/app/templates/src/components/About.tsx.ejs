@@ -1,0 +1,24 @@
+import { Link } from "react-router";
+
+const About = () => {
+    return (
+      <div className="content">
+        <div>
+          <div className="icon-container">
+            <img
+              src="https://avatars.githubusercontent.com/u/32307287"
+              alt="Z Logo"
+              width={200}
+              height={200}
+              className="logo-image"
+            />
+          </div>
+          <h1 className="title capitalize">Welcome to "About Page"</h1>
+          <Link to="/" className="link">Go to Home</Link>
+        </div>
+      </div>
+    );
+  };
+  
+  export default About;
+  
