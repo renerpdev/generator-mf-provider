@@ -1,8 +1,8 @@
-# generator-mf-provider
+# generator-mf-app
 
-> A Yeoman generator for creating React Microfrontend Provider projects with Module Federation, Rsbuild, and TypeScript
+> A Yeoman generator for creating React Microfrontend Provider and Consumer projects with Module Federation, Rsbuild, and TypeScript
 
-[![npm version](https://img.shields.io/npm/v/generator-mf-provider.svg)](https://www.npmjs.com/package/generator-mf-provider)
+[![npm version](https://img.shields.io/npm/v/generator-mf-app.svg)](https://www.npmjs.com/package/generator-mf-app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 📋 Table of Contents
@@ -22,7 +22,12 @@
 
 ## 🎯 Overview
 
-`generator-mf-provider` is a Yeoman generator that scaffolds a complete React microfrontend provider application. It sets up a modern development environment with:
+`generator-mf-app` is a Yeoman generator that scaffolds complete React microfrontend applications. It supports both **provider** and **consumer** templates, allowing you to quickly bootstrap either:
+
+- **Provider** - Microfrontend modules that expose components/features to be consumed by host applications
+- **Consumer** - Host applications (shell) that consume and orchestrate multiple microfrontend providers
+
+It sets up a modern development environment with:
 
 - **React 19** - Latest React with modern features
 - **TypeScript** - Type-safe development
@@ -30,11 +35,10 @@
 - **Module Federation** - Microfrontend architecture support
 - **pnpm** - Fast, disk space efficient package manager
 
-This generator is designed to quickly bootstrap microfrontend providers that can be consumed by a host application (shell) in a microfrontend architecture.
-
 ## ✨ Features
 
-- 🚀 **Quick Setup** - Generate a complete microfrontend provider in seconds
+- 🚀 **Quick Setup** - Generate a complete microfrontend application in seconds
+- 🎯 **Dual Templates** - Choose between provider or consumer templates
 - 📦 **Module Federation Ready** - Pre-configured with Module Federation plugin
 - 🔧 **TypeScript Support** - Full TypeScript configuration out of the box
 - ⚡ **Rsbuild Integration** - Fast builds with Rsbuild
@@ -56,13 +60,13 @@ Before using this generator, ensure you have the following installed:
 Install the generator globally using npm or pnpm:
 
 ```bash
-npm install -g generator-mf-provider
+npm install -g generator-mf-app
 ```
 
 or
 
 ```bash
-pnpm add -g generator-mf-provider
+pnpm add -g generator-mf-app
 ```
 
 ## 💻 Usage
@@ -72,25 +76,31 @@ pnpm add -g generator-mf-provider
 Run the generator in your desired directory:
 
 ```bash
-yo mf-provider
+yo mf-app
 ```
 
 The generator will prompt you for:
 
-1. **Microfrontend name**
+1. **Template type**
+   - Options: `provider` or `consumer`
+   - Default: `provider`
+   - Selects which template to use for scaffolding
+
+2. **Microfrontend name**
    - Default: `mf-example`
    - This will be used as the project folder name and Module Federation name
    - Special characters will be sanitized to underscores
 
-2. **Port to run the app**
+3. **Port to run the app**
    - Default: `3001`
    - This will be configured in the Rsbuild dev server
 
 ### Example
 
 ```bash
-$ yo mf-provider
+$ yo mf-app
 
+? Select template type: provider
 ? Microfrontend name: my-provider
 ? Port to run the app: 3002
 
@@ -240,8 +250,8 @@ To develop or modify this generator:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/renerpdev/generator-mf-provider.git
-cd generator-mf-provider
+git clone https://github.com/renerpdev/generator-mf-app.git
+cd generator-mf-app
 ```
 
 2. Install dependencies:
@@ -259,23 +269,31 @@ npm link
 4. Test the generator:
 
 ```bash
-yo mf-provider
+yo mf-app
 ```
 
 ### Generator Structure
 
 ```
-generator-mf-provider/
+generator-mf-app/
 ├── generators/
 │   └── app/
 │       ├── index.js              # Generator logic
 │       └── templates/            # Template files
-│           ├── package.json.ejs
-│           ├── tsconfig.json.ejs
-│           ├── rsbuild.config.ts.ejs
-│           ├── module-federation.config.ts.ejs
-│           └── src/
-│               └── ...
+│           ├── provider/         # Provider template
+│           │   ├── package.json.ejs
+│           │   ├── tsconfig.json.ejs
+│           │   ├── rsbuild.config.ts.ejs
+│           │   ├── module-federation.config.ts.ejs
+│           │   └── src/
+│           │       └── ...
+│           └── consumer/         # Consumer template
+│               ├── package.json.ejs
+│               ├── tsconfig.json.ejs
+│               ├── rsbuild.config.ts.ejs
+│               ├── module-federation.config.ts.ejs
+│               └── src/
+│                   └── ...
 ├── package.json
 └── README.md
 ```
@@ -349,8 +367,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 
-- Open an issue on [GitHub](https://github.com/renerpdev/generator-mf-provider/issues)
-- Check the [documentation](https://github.com/renerpdev/generator-mf-provider#readme)
+- Open an issue on [GitHub](https://github.com/renerpdev/generator-mf-app/issues)
+- Check the [documentation](https://github.com/renerpdev/generator-mf-app#readme)
 
 ---
 

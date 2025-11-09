@@ -1,7 +1,7 @@
 {
-  "name": "@renerpdev/generator-mf-provider",
+  "name": "@renerpdev/generator-mf-app",
   "version": "0.0.1",
-  "description": "Yeoman generator for creating a React Microfrontend Provider",
+  "description": "Yeoman generator for creating a React Microfrontend app",
   "type": "module",
   "scripts": {
     "prepare": "test -z \"$CI\" && test -z \"$GITHUB_ACTIONS\" && husky install || true",
@@ -29,12 +29,12 @@
   "author": "renerpdev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/renerpdev/generator-mf-provider.git"
+    "url": "https://github.com/renerpdev/generator-mf-app.git"
   },
   "bugs": {
-    "url": "https://github.com/renerpdev/generator-mf-provider/issues"
+    "url": "https://github.com/renerpdev/generator-mf-app/issues"
   },
-  "homepage": "https://github.com/renerpdev/generator-mf-provider#readme",
+  "homepage": "https://github.com/renerpdev/generator-mf-app#readme",
   "license": "MIT",
   "dependencies": {
     "yeoman-generator": "^7.5.1"

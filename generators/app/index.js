@@ -4,6 +4,13 @@ export default class extends Generator {
   async prompting() {
     this.answers = await this.prompt([
       {
+        type: 'list',
+        name: 'templateType',
+        message: 'Select template type:',
+        choices: ['provider', 'consumer'],
+        default: 'provider',
+      },
+      {
         type: 'input',
         name: 'appName',
         message: 'Microfrontend name:',
@@ -19,11 +26,26 @@ export default class extends Generator {
   }
 
   writing() {
-    const { appName, port } = this.answers;
+    const { appName, port, templateType } = this.answers;
     const sanitizedAppName = appName.replace(/[^a-zA-Z0-9_]/g, '_');
 
+    if (templateType === 'consumer') {
+      this.log('Consumer template is not supported yet.');
+      process.exit(1);
+    }
+
+    // Copy shared files
     this.fs.copyTpl(
-      this.templatePath(),
+      this.templatePath('shared'),
+      this.destinationPath(appName),
+      { appName: sanitizedAppName, port },
+      {},
+      { globOptions: { dot: true } }
+    );
+
+    // Copy template-specific files
+    this.fs.copyTpl(
+      this.templatePath(templateType),
       this.destinationPath(appName),
       { appName: sanitizedAppName, port },
       {},
